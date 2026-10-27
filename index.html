@@ -71,12 +71,35 @@ footer input{flex:1;min-width:0;font:inherit;font-size:16px;color:var(--text);ba
 .check input{width:auto}
 #members{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin-top:8px}
 #members button{font-size:13px;padding:7px 8px;text-align:left;border-left:4px solid var(--c)}
+
+/* VOICEVOX */
+#vvBadge{font-size:12px;padding:4px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted);white-space:nowrap;cursor:pointer}
+#vvBadge.ok{border-color:#2e7d32;color:#81c784}
+#vvBadge.ng{border-color:var(--warn);color:var(--warn)}
+header button{white-space:nowrap}
+@media (max-width:480px){
+  header{gap:6px;padding:12px}
+  header h1{font-size:15px;letter-spacing:.1em}
+  header button{padding:7px 10px;font-size:14px}
+  #vvBadge{font-size:11px;padding:3px 7px}
+}
+#credit{font-size:11px;color:#5c728a;text-align:center;margin-top:6px;min-height:14px;max-width:100%;line-height:1.5;overflow-wrap:anywhere}
+.vrow{border:1px solid var(--line);border-left:4px solid var(--c);border-radius:10px;padding:10px;margin-top:8px}
+.vrow .vhead{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:var(--c)}
+.vrow .vhead span{flex:1}
+.vrow .vhead button{font-size:12px;padding:5px 10px}
+.vrow select{margin-top:8px}
+.vrow .sl{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);margin-top:8px}
+.vrow .sl input{flex:1;padding:0}
+.vrow .sl b{min-width:44px;text-align:right;color:var(--text);font-weight:500}
+#vvMsg{font-size:13px;margin-top:8px;line-height:1.6}
 </style>
 </head>
 <body>
 <header>
   <h1>J.A.R.V.I.S.</h1>
   <span class="sp"></span>
+  <span id="vvBadge" title="タップで接続を確かめ直します">VOICEVOX確認中…</span>
   <button id="stopBtn" title="読み上げを止める">■ 停止</button>
   <button id="setBtn">設定</button>
 </header>
@@ -85,6 +108,7 @@ footer input{flex:1;min-width:0;font:inherit;font-size:16px;color:var(--text);ba
   <div id="reactor" title="タップで起動／停止"></div>
   <div id="status">リアクターをタップすると「ジャービス」で起動できます</div>
   <div id="heard"></div>
+  <div id="credit"></div>
 </div>
 
 <div id="log"></div>
@@ -133,9 +157,17 @@ footer input{flex:1;min-width:0;font:inherit;font-size:16px;color:var(--text);ba
     <div class="check"><input type="checkbox" id="voiceOn"><label for="voiceOn" style="margin:0;color:var(--text)">回答を音声で読み上げる</label></div>
     <div class="check"><input type="checkbox" id="summaryOnly"><label for="summaryOnly" style="margin:0;color:var(--text)">複数回答のときはビジョンの要約だけ読み上げる</label></div>
 
-    <label>9人の声を試す</label>
-    <div id="members"></div>
-
+    <label>声の設定（VOICEVOX）</label>
+    <div class="check"><input type="checkbox" id="useVV"><label for="useVV" style="margin:0;color:var(--text)">VOICEVOXの声を使う（つながらないときは自動でブラウザ標準の声）</label></div>
+    <label for="vvUrl">VOICEVOXエンジンの場所</label>
+    <input id="vvUrl" placeholder="http://localhost:50021" autocomplete="off">
+    <div class="row">
+      <button id="vvCheckBtn">接続を確かめて声の一覧を読み込む</button>
+      <button id="vvResetBtn">初期値に戻す</button>
+    </div>
+    <div id="vvMsg"></div>
+    <div id="vvRows"></div>
+    <div class="note">声のキャラクターごとに利用規約があります。動画やSNSなどで公開するときは「VOICEVOX:ずんだもん」のようなクレジット表記を入れてください。使っている声のクレジットはリアクターの下に表示されます。</div>
     <label>別の端末へ引き継ぐ</label>
     <div class="row">
       <button id="exportBtn">設定と会話を書き出す</button>
@@ -152,6 +184,8 @@ footer input{flex:1;min-width:0;font:inherit;font-size:16px;color:var(--text);ba
   </div>
 </div>
 
+<script src="voices.js"></script>
+<script src="tts.js"></script>
 <script>
 /* ===== 9人のメンバー ===== */
 const MEMBERS = {
@@ -346,14 +380,19 @@ function parseReply(raw){
   const s = t.indexOf("{"), e = t.lastIndexOf("}");
   try{
     const o = JSON.parse(t.slice(s, e + 1));
+    // 本文の中に「【トニー】〜」が混ざっていても、名前ごとに分け直す
     const answers = (o.answers || [])
-      .filter(a => a && NAMES.includes(a.name) && a.text)
-      .map(a => ({ name: a.name, text: String(a.text).trim() }));
+      .filter(a => a && a.text)
+      .flatMap(a => TTS.splitBySpeaker(String(a.text), NAMES.includes(a.name) ? a.name : "ジャービス"));
     if(!answers.length) throw new Error("empty");
-    const summary = answers.length > 1 ? String(o.summary || "").trim() : "";
+    let summary = String(o.summary || "").trim().replace(/^【\s*ビジョン[^】]*】\s*/, "");
+    if(answers.length < 2) summary = "";
     return { answers, summary };
   }catch(e){
-    return { answers: [{ name: "ジャービス", text: raw.trim() || "すみません、うまく答えをまとめられませんでした。" }], summary: "" };
+    // JSONで返ってこなかったとき：「【ジャービス】〜【トニー】〜」の形を名前ごとに分ける（名前なしはジャービス）
+    const answers = TTS.splitBySpeaker(raw.trim(), "ジャービス");
+    if(!answers.length) answers.push({ name: "ジャービス", text: "すみません、うまく答えをまとめられませんでした。" });
+    return { answers, summary: "" };
   }
 }
 
@@ -398,55 +437,46 @@ async function ask(q){
     setState("speaking", "話しています…（■停止で止められます）");
     const queue = (summary && cfg.summaryOnly) ? [] : answers.slice();
     if(summary) queue.push({ name: "ビジョン", text: summary });
-    for(const a of queue){
-      if(stopRequested) break;
-      await speak(a.name, a.text);
-    }
+    await TTS.speakAll(queue, {
+      onSegment: seg => setState("speaking", `${seg.name}が話しています…（■停止で止められます）`)
+    });
   }
-  stopRequested = false;
   busy = false;
   resumeListening();
 }
 
-/* ===== 音声の読み上げ ===== */
-let voices = [];
-const MALE = /otoya|ichiro|keita|daichi|kenji|hattori|naoki|male|男性/i;
-const FEMALE = /kyoko|haruka|nanami|ayumi|sayaka|mizuki|o-ren|female|女性|google 日本語/i;
-function loadVoices(){
-  try{ voices = speechSynthesis.getVoices().filter(v => /^ja/i.test(v.lang)); }catch(e){ voices = []; }
+/* ===== 音声の読み上げ（中身は tts.js、声の設定は voices.js） ===== */
+TTS.setNames(NAMES);
+// VOICEVOXにつながらないときに使うブラウザ標準の声の高さ・速さ
+TTS.setBrowserParams(name => {
+  const m = MEMBERS[name] || MEMBERS["ジャービス"];
+  return { gender: m.gender, pitch: m.pitch, rate: m.rate };
+});
+function speak(name, text){ return TTS.speakAll([{ name, text }]); }
+function stopSpeaking(){ TTS.stop(); }
+
+// 画面上部の「VOICEVOX接続中／未接続」とクレジット表示
+let speakerList = [];
+function updateCredit(){
+  const st = TTS.status();
+  if(st !== "ok" || !cfg.voiceOn){ $("credit").textContent = ""; return; }
+  const names = [...new Set(NAMES.map(n => {
+    const id = TTS.voiceFor(n).speaker;
+    const sp = speakerList.find(x => x.id === id);
+    return sp ? sp.speakerName : (TTS.voiceFor(n).label || "").replace(/（.*$/, "");
+  }).filter(Boolean))];
+  $("credit").textContent = names.length ? "VOICEVOX:" + names.join("、VOICEVOX:") : "";
 }
-if("speechSynthesis" in window){
-  loadVoices();
-  speechSynthesis.onvoiceschanged = loadVoices;
-}
-function pickVoice(gender){
-  if(!voices.length) return null;
-  const re = gender === "m" ? MALE : FEMALE;
-  return voices.find(v => re.test(v.name)) || voices[0];
-}
-let stopRequested = false;
-function speak(name, text){
-  return new Promise(resolve => {
-    if(!("speechSynthesis" in window)) return resolve();
-    const m = MEMBERS[name] || MEMBERS["ジャービス"];
-    const chunks = text.split(/(?<=[。！？!?])/).map(s => s.trim()).filter(Boolean); // 長文が途中で切れないよう分割
-    let i = 0;
-    const next = () => {
-      if(stopRequested || i >= chunks.length) return resolve();
-      const u = new SpeechSynthesisUtterance(chunks[i++]);
-      u.lang = "ja-JP";
-      const v = pickVoice(m.gender); if(v) u.voice = v;
-      u.pitch = m.pitch; u.rate = m.rate;
-      u.onend = next; u.onerror = next;
-      speechSynthesis.speak(u);
-    };
-    next();
-  });
-}
-function stopSpeaking(){
-  stopRequested = true;
-  try{ speechSynthesis.cancel(); }catch(e){}
-}
+TTS.onStatus(st => {
+  const b = $("vvBadge");
+  b.className = st === "ok" ? "ok" : (st === "ng" ? "ng" : "");
+  b.textContent = st === "ok" ? "VOICEVOX接続中" : st === "ng" ? "VOICEVOX未接続" : st === "off" ? "標準の声" : "VOICEVOX確認中…";
+  b.title = st === "ng" ? "ブラウザ標準の声で読み上げます。パソコンでVOICEVOXを起動してからタップすると確かめ直します。" : "タップで接続を確かめ直します";
+  if(st === "ok" && !speakerList.length){
+    TTS.getSpeakers().then(l => { speakerList = l; updateCredit(); }).catch(() => {});
+  }
+  updateCredit();
+});
 
 /* ===== 「ジャービス」で起動（音声認識） ===== */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -551,6 +581,7 @@ function openSettings(){
   $("projects").value = cfg.projects;
   $("voiceOn").checked = cfg.voiceOn;
   $("summaryOnly").checked = cfg.summaryOnly;
+  openVoiceSettings();
   $("settings").classList.add("open");
 }
 function saveSettings(){
@@ -564,21 +595,95 @@ function saveSettings(){
   cfg.voiceOn = $("voiceOn").checked;
   cfg.summaryOnly = $("summaryOnly").checked;
   for(const k of Object.keys(cfg)) store.set(k, cfg[k]);
+  saveVoiceSettings();
   $("settings").classList.remove("open");
 }
-function buildMemberButtons(){
-  const box = $("members");
+/* --- 声の設定（メンバーごとの声・速さ・高さ） --- */
+let vvDraft = null;   // 設定画面で編集中の内容
+function vvMessage(html, color){ $("vvMsg").innerHTML = html; $("vvMsg").style.color = color || "var(--muted)"; }
+function vvNgHelp(){
+  return "VOICEVOXにつながりません。①パソコンでVOICEVOXが起動しているか、②このサイトの接続許可（CORS）が設定されているか確認してください。" +
+         "スマホからは使えないため、ブラウザ標準の声で読み上げます。";
+}
+function renderVoiceRows(){
+  const box = $("vvRows"); box.innerHTML = "";
   for(const n of NAMES){
-    const b = document.createElement("button");
-    b.style.setProperty("--c", MEMBERS[n].color);
-    b.textContent = `${n}（${MEMBERS[n].role}）`;
-    b.onclick = () => { stopSpeaking(); stopRequested = false; speak(n, `${n}です。${MEMBERS[n].role}を担当します。`); };
-    box.append(b);
+    const v = vvDraft.members[n];
+    const row = document.createElement("div");
+    row.className = "vrow"; row.style.setProperty("--c", MEMBERS[n].color);
+
+    const head = document.createElement("div"); head.className = "vhead";
+    const title = document.createElement("span"); title.textContent = `${n}（${MEMBERS[n].role}）`;
+    const test = document.createElement("button"); test.textContent = "▶ 試す";
+    test.onclick = () => {
+      TTS.saveSettings(vvDraft);   // 試すときは編集中の内容で鳴らす
+      speak(n, `${n}です。${MEMBERS[n].role}を担当します。`);
+    };
+    head.append(title, test);
+
+    const sel = document.createElement("select");
+    const opts = speakerList.length ? speakerList : [{ id: v.speaker, label: v.label || `ID ${v.speaker}` }];
+    for(const sp of opts){
+      const o = document.createElement("option"); o.value = sp.id; o.textContent = `${sp.label}［ID ${sp.id}］`;
+      sel.append(o);
+    }
+    if(speakerList.length && !speakerList.some(sp => sp.id === v.speaker)){
+      const o = document.createElement("option"); o.value = v.speaker; o.textContent = `ID ${v.speaker}（この声は見つかりません）`;
+      sel.prepend(o);
+    }
+    sel.value = String(v.speaker);
+    sel.onchange = () => {
+      v.speaker = Number(sel.value);
+      const sp = speakerList.find(x => x.id === v.speaker); if(sp) v.label = sp.label;
+    };
+
+    const slider = (label, key, min, max, step) => {
+      const w = document.createElement("div"); w.className = "sl";
+      const l = document.createElement("span"); l.textContent = label;
+      const r = document.createElement("input"); r.type = "range"; r.min = min; r.max = max; r.step = step; r.value = v[key];
+      const b = document.createElement("b"); b.textContent = Number(v[key]).toFixed(2);
+      r.oninput = () => { v[key] = Number(r.value); b.textContent = v[key].toFixed(2); };
+      w.append(l, r, b); return w;
+    };
+    row.append(head, sel, slider("速さ", "speedScale", 0.5, 2, 0.05), slider("高さ", "pitchScale", -0.15, 0.15, 0.01));
+    box.append(row);
   }
+}
+async function loadSpeakerList(){
+  vvDraft.engineUrl = $("vvUrl").value.trim().replace(/\/+$/, "") || "http://localhost:50021";
+  vvDraft.useVoicevox = $("useVV").checked;
+  TTS.saveSettings(vvDraft);
+  vvMessage("確かめています…");
+  const ok = await TTS.checkEngine(true);
+  if(!ok){ vvMessage(vvNgHelp(), "var(--warn)"); renderVoiceRows(); return; }
+  try{
+    speakerList = await TTS.getSpeakers(true);
+    vvMessage(`VOICEVOXにつながりました。${speakerList.length}種類の声から選べます。`, "#81c784");
+  }catch(e){
+    vvMessage("つながりましたが、声の一覧を読み込めませんでした。", "var(--warn)");
+  }
+  renderVoiceRows(); updateCredit();
+}
+function openVoiceSettings(){
+  vvDraft = JSON.parse(JSON.stringify(TTS.settings()));
+  $("useVV").checked = vvDraft.useVoicevox;
+  $("vvUrl").value = vvDraft.engineUrl;
+  vvMessage(TTS.status() === "ok" ? "VOICEVOXにつながっています。" : TTS.status() === "ng" ? vvNgHelp() : "",
+            TTS.status() === "ng" ? "var(--warn)" : "#81c784");
+  renderVoiceRows();
+  if(TTS.status() !== "off" && (!speakerList.length || TTS.status() === "unknown")) loadSpeakerList();
+}
+function saveVoiceSettings(){
+  if(!vvDraft) return;
+  vvDraft.engineUrl = $("vvUrl").value.trim().replace(/\/+$/, "") || "http://localhost:50021";
+  vvDraft.useVoicevox = $("useVV").checked;
+  TTS.saveSettings(vvDraft);
+  TTS.checkEngine(true).then(updateCredit);
 }
 function exportData(){
   const data = { version:2, profile:cfg.profile, projects:cfg.projects, voiceOn:cfg.voiceOn,
-                 summaryOnly:cfg.summaryOnly, model:cfg.model, provider:cfg.provider, groqModel:cfg.groqModel, history };
+                 summaryOnly:cfg.summaryOnly, model:cfg.model, provider:cfg.provider, groqModel:cfg.groqModel,
+                 voiceSettings: TTS.settings(), history };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type:"application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -599,6 +704,7 @@ function importData(file){
       if(typeof d.voiceOn === "boolean") cfg.voiceOn = d.voiceOn;
       if(typeof d.summaryOnly === "boolean") cfg.summaryOnly = d.summaryOnly;
       if(Array.isArray(d.history)) history = d.history;
+      if(d.voiceSettings && d.voiceSettings.members) TTS.saveSettings(d.voiceSettings);
       for(const k of Object.keys(cfg)) store.set(k, cfg[k]);
       store.set("history", history);
       openSettings(); renderHistory();
@@ -627,8 +733,17 @@ $("clearBtn").onclick = () => {
   }
 };
 
-buildMemberButtons();
+$("vvBadge").onclick = () => TTS.checkEngine(true);
+$("vvCheckBtn").onclick = loadSpeakerList;
+$("vvResetBtn").onclick = () => {
+  if(!confirm("声の設定を voices.js の初期値に戻しますか？")) return;
+  TTS.resetSettings(); openVoiceSettings();
+};
+$("useVV").onchange = () => { vvDraft.useVoicevox = $("useVV").checked; };
+$("sendBtn").addEventListener("click", TTS.unlock);
+
 renderHistory();
+TTS.checkEngine(true);
 if(!currentKey()){
   addMsg("ジャービス", "右上の「設定」で使うAIを選び、そのAPIキーを入れてください。おすすめはGroqです。前に書き出した設定ファイルがあれば「読み込む」で引き継げます。そのあと、リアクターをタップして「ジャービス」と呼べば起動します。", "sys");
 }
