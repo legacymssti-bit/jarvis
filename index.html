@@ -47,6 +47,11 @@ button.danger{border-color:var(--err);color:var(--err)}
 .msg.user .who{color:#8aa0b8}
 .msg.sys{font-size:13px;color:var(--muted);border-left-color:var(--warn)}
 .msg.summary{background:#160f22}
+.doc{background:#0a1a14;border:1px solid #1f4d3a;border-radius:12px;padding:12px 14px}
+.doc .dh{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+.doc .dt{font-weight:600;color:#7ee2b0;flex:1;min-width:140px}
+.doc .dh button{font-size:13px;padding:6px 10px}
+.doc pre{margin:0;white-space:pre-wrap;word-break:break-word;font:inherit;font-size:15px;line-height:1.75}
 .route{font-size:12px;color:var(--muted);text-align:center}
 
 /* 入力 */
@@ -231,7 +236,36 @@ function renderHistory(){
     addMsg("あなた", h.q, "user");
     for(const a of h.answers) addMsg(a.name, a.text);
     if(h.summary) addMsg("ビジョン", h.summary, "summary");
+    if(h.doc) addDoc(h.doc);
   }
+}
+
+/* ===== 作ったもの（文章・資料）の表示 ===== */
+function safeName(s){ return (s || "jarvis").replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 40); }
+function addDoc(doc){
+  const box = document.createElement("div");
+  box.className = "doc";
+  const head = document.createElement("div"); head.className = "dh";
+  const t = document.createElement("div"); t.className = "dt";
+  t.textContent = "📄 " + (doc.title || "作成したもの") + (doc.by ? `（${doc.by}作成）` : "");
+  const copy = document.createElement("button"); copy.textContent = "コピー";
+  copy.onclick = async () => {
+    try{ await navigator.clipboard.writeText(doc.content); copy.textContent = "コピーしました"; }
+    catch(e){ const r = document.createRange(); r.selectNodeContents(pre); const s = getSelection(); s.removeAllRanges(); s.addRange(r); copy.textContent = "選択しました"; }
+    setTimeout(() => copy.textContent = "コピー", 2000);
+  };
+  const dl = document.createElement("button"); dl.textContent = "保存";
+  dl.onclick = () => {
+    const blob = new Blob([doc.content], { type: "text/plain;charset=utf-8" });
+    const a = document.createElement("a"); a.href = URL.createObjectURL(blob);
+    a.download = safeName(doc.title) + ".txt"; a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+  head.append(t, copy, dl);
+  const pre = document.createElement("pre"); pre.textContent = doc.content;
+  box.append(head, pre);
+  logEl.append(box);
+  logEl.scrollTop = logEl.scrollHeight;
 }
 
 /* ===== AI 呼び出し（Groq / Gemini） ===== */
@@ -263,16 +297,24 @@ ${cfg.projects}
 4. 2人以上が答えたときは、最後にビジョンが2〜3文で結論をまとめる（summary）。1人のときは summary は空文字。
 5. 進行中のプロジェクトに関係する質問では、上の情報をふまえて具体的に答える。知らないことは推測で断定しない。
 6. ユーザーへの呼びかけは「ユーザーについて」に名前があればその名前に「さん」を付ける。
+7. 【作成の依頼】「作って」「書いて」「考えて出して」「まとめて」「一覧にして」など、何かを作ることを頼まれたら、話すだけで終わらせず、必ず完成品を doc に入れる。
+   ・例：Instagramの投稿文やハッシュタグ、リールやYouTubeの台本、noteの記事（見出しつき・本文全部）、チラシや案内の文面、お客様へのメッセージ、営業トーク、やることリスト、スケジュール、企画書、比較表、計算結果など
+   ・doc.content には、そのままコピーして使える完成品を全部書く。途中で省略しない。「〜など」で済ませない。見出しや箇条書き、改行は使ってよい
+   ・担当は内容に合わせる（記事や投稿文はトニー、企画はトール、予定やリストはペッパー、数字はシュリなど）。doc.by に作った担当名を入れる
+   ・このとき answers の text は「作りました。画面に出しています。」のような1〜2文の短い報告と、ひとこと補足だけにする
+   ・作成の依頼でなければ doc は null にする
+   ・前回作ったものの手直しを頼まれたら、直した完成品を全部 doc に入れ直す
 
 【出力】
-次のJSONだけを出力する。前後に説明文やコードブロック記号を付けない。
-{"assignees":["担当名",...],"answers":[{"name":"担当名","text":"回答"}],"summary":"ビジョンのまとめまたは空文字"}`;
+次のJSONだけを出力する。前後に説明文やコードブロック記号を付けない。文字列の中の改行は \\n で表す。
+{"assignees":["担当名",...],"answers":[{"name":"担当名","text":"回答"}],"summary":"ビジョンのまとめまたは空文字","doc":{"title":"作ったものの題名","by":"担当名","content":"完成品の全文"} または null}`;
 }
 
 function buildUserText(q){
-  const recent = history.slice(-4).map(h => {
+  const recent = history.slice(-3).map(h => {
     const a = h.answers.map(x => `${x.name}：${x.text}`).join("\n");
-    return `ユーザー：${h.q}\n${a}${h.summary ? "\nビジョン（まとめ）：" + h.summary : ""}`;
+    const d = h.doc ? `\n（作成したもの「${h.doc.title}」）\n${h.doc.content.slice(0, 1500)}` : "";
+    return `ユーザー：${h.q}\n${a}${h.summary ? "\nビジョン（まとめ）：" + h.summary : ""}${d}`;
   }).join("\n\n");
   return (recent ? `【これまでの会話】\n${recent}\n\n` : "") + `【今回の質問】\n${q}`;
 }
@@ -294,8 +336,9 @@ async function callGroq(q){
         { role: "system", content: buildSystemPrompt() },
         { role: "user", content: buildUserText(q) }
       ],
-      temperature: 0.8,
-      max_tokens: 1200
+      temperature: 0.7,
+      max_tokens: 4000,
+      response_format: { type: "json_object" }
     })
   });
   if(!res.ok) throw httpError(res, await res.text());
@@ -351,9 +394,18 @@ function parseReply(raw){
       .map(a => ({ name: a.name, text: String(a.text).trim() }));
     if(!answers.length) throw new Error("empty");
     const summary = answers.length > 1 ? String(o.summary || "").trim() : "";
-    return { answers, summary };
+    let doc = null;
+    if(o.doc && typeof o.doc === "object" && String(o.doc.content || "").trim()){
+      doc = { title: String(o.doc.title || "作成したもの").trim(),
+              by: NAMES.includes(o.doc.by) ? o.doc.by : "",
+              content: String(o.doc.content).trim() };
+    }
+    return { answers, summary, doc };
   }catch(e){
-    return { answers: [{ name: "ジャービス", text: raw.trim() || "すみません、うまく答えをまとめられませんでした。" }], summary: "" };
+    const text = raw.trim();
+    // JSONで返らなかった長い文章は、作ったものとして表示する
+    if(text.length > 300) return { answers: [{ name: "ジャービス", text: "作りました。画面に出しています。" }], summary: "", doc: { title: "作成したもの", by: "", content: text } };
+    return { answers: [{ name: "ジャービス", text: text || "すみません、うまく答えをまとめられませんでした。" }], summary: "", doc: null };
   }
 }
 
@@ -385,12 +437,13 @@ async function ask(q){
     busy = false; resumeListening(); return;
   }
 
-  const { answers, summary } = parseReply(raw);
+  const { answers, summary, doc } = parseReply(raw);
   addNote("担当：" + answers.map(a => a.name).join("・"));
   for(const a of answers) addMsg(a.name, a.text);
   if(summary) addMsg("ビジョン", summary, "summary");
+  if(doc) addDoc(doc);
 
-  history.push({ q, answers, summary });
+  history.push(doc ? { q, answers, summary, doc } : { q, answers, summary });
   if(history.length > 50) history = history.slice(-50);
   store.set("history", history);
 
