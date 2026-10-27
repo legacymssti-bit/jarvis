@@ -1,0 +1,637 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>J.A.R.V.I.S.</title>
+<style>
+:root{
+  --bg:#060b12; --panel:#0d1622; --panel2:#122033; --line:#1d3350;
+  --text:#dbe7f5; --muted:#7f95ad; --accent:#4fc3f7; --warn:#ffb74d; --err:#ef5350;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);
+  font-family:"Hiragino Sans","Noto Sans JP","Yu Gothic UI",system-ui,sans-serif}
+body{display:flex;flex-direction:column;max-width:860px;margin:0 auto}
+header{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--line)}
+header h1{font-size:18px;letter-spacing:.25em;margin:0;color:var(--accent);font-weight:600}
+header .sp{flex:1}
+button{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);
+  border-radius:10px;padding:9px 14px;cursor:pointer}
+button:hover{border-color:var(--accent)}
+button.primary{background:var(--accent);color:#03121c;border-color:var(--accent);font-weight:600}
+button.danger{border-color:var(--err);color:var(--err)}
+
+/* アークリアクター */
+#core{display:flex;flex-direction:column;align-items:center;padding:18px 16px 8px}
+#reactor{width:120px;height:120px;border-radius:50%;position:relative;cursor:pointer;
+  background:radial-gradient(circle,#e8fbff 0 12%,#4fc3f7 22%,#0b3550 48%,#071522 70%);
+  box-shadow:0 0 18px #4fc3f733, inset 0 0 18px #4fc3f744;transition:box-shadow .3s}
+#reactor::after{content:"";position:absolute;inset:8px;border-radius:50%;
+  border:2px dashed #4fc3f799;animation:spin 14s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulse{0%,100%{box-shadow:0 0 18px #4fc3f766}50%{box-shadow:0 0 46px #4fc3f7cc}}
+#reactor.listening{animation:pulse 2s ease-in-out infinite}
+#reactor.awake{box-shadow:0 0 50px #4fc3f7}
+#reactor.thinking::after{animation-duration:1.2s}
+#reactor.speaking{animation:pulse .8s ease-in-out infinite}
+#status{margin-top:12px;font-size:14px;color:var(--muted);min-height:20px;text-align:center}
+#heard{font-size:12px;color:#5c728a;min-height:16px;text-align:center;margin-top:4px}
+
+/* 会話ログ */
+#log{flex:1;overflow-y:auto;padding:8px 16px 16px;display:flex;flex-direction:column;gap:10px}
+.msg{background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--c,var(--accent));
+  border-radius:10px;padding:10px 12px;line-height:1.7;font-size:15px;white-space:pre-wrap}
+.msg .who{font-size:12px;font-weight:600;color:var(--c,var(--accent));margin-bottom:2px}
+.msg.user{background:transparent;border-left-color:#5c728a;align-self:flex-end;max-width:85%}
+.msg.user .who{color:#8aa0b8}
+.msg.sys{font-size:13px;color:var(--muted);border-left-color:var(--warn)}
+.msg.summary{background:#160f22}
+.route{font-size:12px;color:var(--muted);text-align:center}
+
+/* 入力 */
+footer{display:flex;gap:8px;padding:10px 16px calc(10px + env(safe-area-inset-bottom));
+  border-top:1px solid var(--line);background:var(--bg)}
+footer input{flex:1;min-width:0;font:inherit;font-size:16px;color:var(--text);background:var(--panel);
+  border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+
+/* 設定 */
+#settings{position:fixed;inset:0;background:#000a;display:none;align-items:flex-start;justify-content:center;
+  overflow-y:auto;padding:16px;z-index:10}
+#settings.open{display:flex}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;width:100%;max-width:640px}
+.card h2{margin:0 0 12px;font-size:17px}
+.card label{display:block;font-size:13px;color:var(--muted);margin:14px 0 6px}
+.card input,.card textarea,.card select{width:100%;font:inherit;font-size:15px;color:var(--text);
+  background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:9px 10px}
+.card textarea{min-height:110px;line-height:1.6;resize:vertical}
+.card .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.card .note{font-size:12px;color:var(--muted);margin-top:6px;line-height:1.6}
+.check{display:flex;align-items:center;gap:8px;margin-top:14px;font-size:14px}
+.check input{width:auto}
+#members{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin-top:8px}
+#members button{font-size:13px;padding:7px 8px;text-align:left;border-left:4px solid var(--c)}
+</style>
+</head>
+<body>
+<header>
+  <h1>J.A.R.V.I.S.</h1>
+  <span class="sp"></span>
+  <button id="stopBtn" title="読み上げを止める">■ 停止</button>
+  <button id="setBtn">設定</button>
+</header>
+
+<div id="core">
+  <div id="reactor" title="タップで起動／停止"></div>
+  <div id="status">リアクターをタップすると「ジャービス」で起動できます</div>
+  <div id="heard"></div>
+</div>
+
+<div id="log"></div>
+
+<footer>
+  <input id="text" placeholder="文字で話しかける（例：新しい集客のアイデアある？）" autocomplete="off">
+  <button class="primary" id="sendBtn">送信</button>
+</footer>
+
+<div id="settings">
+  <div class="card">
+    <h2>設定</h2>
+
+    <label for="provider">使うAI</label>
+    <select id="provider">
+      <option value="groq">Groq（無料・速い・おすすめ）</option>
+      <option value="gemini">Gemini（無料枠）</option>
+    </select>
+
+    <div id="groqBox">
+      <label for="groqKey">Groq APIキー</label>
+      <input id="groqKey" type="password" placeholder="console.groq.com で作成したキーを貼り付け" autocomplete="off">
+      <label for="groqModel">Groqのモデル</label>
+      <select id="groqModel">
+        <option value="llama-3.3-70b-versatile">Llama 3.3 70B（標準）</option>
+        <option value="openai/gpt-oss-120b">GPT-OSS 120B（賢め・上限は少なめ）</option>
+        <option value="llama-3.1-8b-instant">Llama 3.1 8B（軽い・日本語は弱め）</option>
+      </select>
+    </div>
+
+    <div id="geminiBox">
+      <label for="apiKey">Gemini APIキー</label>
+      <input id="apiKey" type="password" placeholder="Google AI Studio で作成したキーを貼り付け" autocomplete="off">
+      <label for="model">Geminiのモデル名</label>
+      <input id="model" placeholder="gemini-3.1-flash-lite">
+    </div>
+    <div class="note">キーはこの端末のブラウザの中だけに保存されます。ファイル本体には書き込まれません。上限に当たったときは自動で少し待ってやり直します。</div>
+
+    <label for="profile">あなたについて</label>
+    <textarea id="profile" placeholder="名前、仕事、呼ばれ方など"></textarea>
+
+    <label for="projects">進行中のプロジェクト（ここに書いた内容を全員が把握して答えます）</label>
+    <textarea id="projects" style="min-height:220px" placeholder="進めている仕事やプロジェクトの内容"></textarea>
+    <div class="note">新しいプロジェクトや進み具合は、ここに書き足してください。</div>
+
+    <div class="check"><input type="checkbox" id="voiceOn"><label for="voiceOn" style="margin:0;color:var(--text)">回答を音声で読み上げる</label></div>
+    <div class="check"><input type="checkbox" id="summaryOnly"><label for="summaryOnly" style="margin:0;color:var(--text)">複数回答のときはビジョンの要約だけ読み上げる</label></div>
+
+    <label>9人の声を試す</label>
+    <div id="members"></div>
+
+    <label>別の端末へ引き継ぐ</label>
+    <div class="row">
+      <button id="exportBtn">設定と会話を書き出す</button>
+      <button id="importBtn">読み込む</button>
+      <input type="file" id="importFile" accept="application/json" style="display:none">
+    </div>
+    <div class="note">パソコンとスマホは保存場所が別々です。書き出したファイルをもう一方で読み込むと、プロジェクト情報と会話の続きを引き継げます。書き出しファイルにはAPIキーは含まれません。</div>
+
+    <div class="row">
+      <button class="danger" id="clearBtn">会話の履歴を消す</button>
+      <span style="flex:1"></span>
+      <button class="primary" id="closeBtn">保存して閉じる</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ===== 9人のメンバー ===== */
+const MEMBERS = {
+  "ジャービス": {role:"リーダー", color:"#4fc3f7", gender:"m", pitch:0.9,  rate:1.0,
+    style:"落ち着いた丁寧な執事口調。チームのまとめ役で、誰に任せるかを判断する。"},
+  "スティーブ": {role:"日常会話", color:"#64b5f6", gender:"m", pitch:1.0,  rate:1.0,
+    style:"誠実で温かく、親しみやすい。雑談やちょっとした話し相手。"},
+  "ブルース":   {role:"調べ物", color:"#81c784", gender:"m", pitch:0.95, rate:0.95,
+    style:"穏やかで少し慎重な学者風。調べた事実を正確に、根拠とともに伝える。"},
+  "ナターシャ": {role:"仕事の相談", color:"#e57373", gender:"f", pitch:0.9,  rate:1.0,
+    style:"冷静で的確な相談役。事業の判断や優先順位を一緒に考える。"},
+  "トニー":     {role:"マーケティング", color:"#ffb74d", gender:"m", pitch:1.1,  rate:1.2,
+    style:"自信たっぷりのカリスマ営業。ノリがよく、集客や売り方を具体的に提案する。"},
+  "トール":     {role:"アイデア出し", color:"#ffd54f", gender:"m", pitch:0.6,  rate:0.9,
+    style:"豪快で力強い。常識にとらわれない大胆なアイデアを出す。"},
+  "ペッパー":   {role:"秘書", color:"#f06292", gender:"f", pitch:1.1,  rate:1.05,
+    style:"明るくきびきびした秘書。段取り、やることの整理、予定の組み立てが得意。"},
+  "ビジョン":   {role:"要約", color:"#ba68c8", gender:"m", pitch:0.8,  rate:0.85,
+    style:"淡々と論理的。複数の意見を整理して結論をまとめる。"},
+  "シュリ":     {role:"データ分析", color:"#4dd0e1", gender:"f", pitch:1.4,  rate:1.2,
+    style:"快活な天才技術者。数字や仕組み、アプリやITの話が得意。"}
+};
+const NAMES = Object.keys(MEMBERS);
+
+/* ===== 初期データ ===== */
+const DEFAULT_PROFILE = "";
+
+const DEFAULT_PROJECTS = "";
+
+/* ===== 保存（端末内） ===== */
+const store = {
+  get(k, d){ try{ const v = localStorage.getItem("jarvis_"+k); return v===null ? d : JSON.parse(v); }catch(e){ return d; } },
+  set(k, v){ try{ localStorage.setItem("jarvis_"+k, JSON.stringify(v)); }catch(e){} }
+};
+let cfg = {
+  provider: store.get("provider", "groq"),
+  groqKey:  store.get("groqKey", ""),
+  groqModel:store.get("groqModel", "llama-3.3-70b-versatile"),
+  apiKey:  store.get("apiKey", ""),
+  model:   store.get("model", "gemini-3.1-flash-lite"),
+  profile: store.get("profile", DEFAULT_PROFILE),
+  projects:store.get("projects", DEFAULT_PROJECTS),
+  voiceOn: store.get("voiceOn", true),
+  summaryOnly: store.get("summaryOnly", false)
+};
+let history = store.get("history", []);   // [{q, answers:[{name,text}], summary}]
+
+/* ===== 画面 ===== */
+const $ = id => document.getElementById(id);
+const logEl = $("log");
+function addMsg(name, text, cls=""){
+  const d = document.createElement("div");
+  d.className = "msg " + cls;
+  const m = MEMBERS[name];
+  if(m) d.style.setProperty("--c", m.color);
+  const who = document.createElement("div");
+  who.className = "who";
+  who.textContent = m ? `${name}（${m.role}）` : name;
+  const body = document.createElement("div");
+  body.textContent = text;
+  d.append(who, body);
+  logEl.append(d);
+  logEl.scrollTop = logEl.scrollHeight;
+}
+function addNote(text){
+  const d = document.createElement("div"); d.className = "route"; d.textContent = text;
+  logEl.append(d); logEl.scrollTop = logEl.scrollHeight;
+}
+function setState(state, msg){
+  const r = $("reactor");
+  r.className = state || "";
+  if(msg !== undefined) $("status").textContent = msg;
+}
+function renderHistory(){
+  logEl.innerHTML = "";
+  for(const h of history.slice(-20)){
+    addMsg("あなた", h.q, "user");
+    for(const a of h.answers) addMsg(a.name, a.text);
+    if(h.summary) addMsg("ビジョン", h.summary, "summary");
+  }
+}
+
+/* ===== AI 呼び出し（Groq / Gemini） ===== */
+function buildSystemPrompt(){
+  const team = NAMES.map(n => `・${n}（${MEMBERS[n].role}）：${MEMBERS[n].style}`).join("\n");
+  return `あなたは「ジャービス」が率いる9人のAIチームです。ユーザー専用の音声アシスタントとして答えます。
+
+【チーム】
+${team}
+
+【ユーザーについて】
+${cfg.profile}
+
+【進行中のプロジェクト】
+${cfg.projects}
+
+【ルール】
+1. まずリーダーのジャービスが質問の内容を判断し、答える担当を選ぶ。1人で十分なら1人、内容によっては2〜4人。
+   ・雑談やあいさつ → スティーブ
+   ・事実確認、調べ物 → ブルース（最新情報は確実でないときはそう伝える）
+   ・事業の判断や相談 → ナターシャ
+   ・集客、売り方、SNS → トニー
+   ・新しい発想が欲しいとき → トール
+   ・予定、段取り、やることの整理 → ペッパー
+   ・数字、データ、アプリやITの話 → シュリ
+   ・チームについての質問や振り分けの説明 → ジャービス
+2. 各担当はそれぞれのキャラクターの口調で、その担当の視点から答える。他の担当と同じ内容をくり返さない。
+3. 回答は音声で読み上げるので、話し言葉で1人2〜4文。記号、箇条書き、マークダウン、絵文字、URLの読み上げは使わない。
+4. 2人以上が答えたときは、最後にビジョンが2〜3文で結論をまとめる（summary）。1人のときは summary は空文字。
+5. 進行中のプロジェクトに関係する質問では、上の情報をふまえて具体的に答える。知らないことは推測で断定しない。
+6. ユーザーへの呼びかけは「ユーザーについて」に名前があればその名前に「さん」を付ける。
+
+【出力】
+次のJSONだけを出力する。前後に説明文やコードブロック記号を付けない。
+{"assignees":["担当名",...],"answers":[{"name":"担当名","text":"回答"}],"summary":"ビジョンのまとめまたは空文字"}`;
+}
+
+function buildUserText(q){
+  const recent = history.slice(-4).map(h => {
+    const a = h.answers.map(x => `${x.name}：${x.text}`).join("\n");
+    return `ユーザー：${h.q}\n${a}${h.summary ? "\nビジョン（まとめ）：" + h.summary : ""}`;
+  }).join("\n\n");
+  return (recent ? `【これまでの会話】\n${recent}\n\n` : "") + `【今回の質問】\n${q}`;
+}
+
+function httpError(res, text){
+  const err = new Error(text); err.status = res.status;
+  const ra = parseFloat(res.headers.get("retry-after"));
+  if(!isNaN(ra)) err.retryAfter = ra;
+  return err;
+}
+
+async function callGroq(q){
+  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": "Bearer " + cfg.groqKey },
+    body: JSON.stringify({
+      model: cfg.groqModel,
+      messages: [
+        { role: "system", content: buildSystemPrompt() },
+        { role: "user", content: buildUserText(q) }
+      ],
+      temperature: 0.8,
+      max_tokens: 1200
+    })
+  });
+  if(!res.ok) throw httpError(res, await res.text());
+  const j = await res.json();
+  return (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "";
+}
+
+async function callGemini(q){
+  const body = {
+    systemInstruction: { parts: [{ text: buildSystemPrompt() }] },
+    contents: [{ role: "user", parts: [{ text: buildUserText(q) }] }],
+    generationConfig: { temperature: 0.8, responseMimeType: "application/json" }
+  };
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(cfg.model || "gemini-3.1-flash-lite")}:generateContent`;
+  const res = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "x-goog-api-key": cfg.apiKey },
+    body: JSON.stringify(body)
+  });
+  if(!res.ok) throw httpError(res, await res.text());
+  const j = await res.json();
+  const parts = (j.candidates && j.candidates[0] && j.candidates[0].content && j.candidates[0].content.parts) || [];
+  return parts.filter(p => !p.thought).map(p => p.text || "").join("");
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+// 1回の質問につき1回だけ呼ぶ。上限(429)や混雑(5xx)のときは待って最大3回やり直す
+async function callAI(q){
+  const fn = cfg.provider === "gemini" ? callGemini : callGroq;
+  for(let attempt = 0; ; attempt++){
+    try{ return await fn(q); }
+    catch(e){
+      const retryable = e.status === 429 || (e.status >= 500 && e.status < 600);
+      if(!retryable || attempt >= 3) throw e;
+      const wait = Math.min(Math.max(e.retryAfter || (5 * (attempt + 1)), 2), 30);
+      for(let s = Math.ceil(wait); s > 0; s--){
+        setState("thinking", `混み合っています。${s}秒待ってやり直します…`);
+        await sleep(1000);
+      }
+      setState("thinking", "ジャービスが担当を選んでいます…");
+    }
+  }
+}
+function currentKey(){ return cfg.provider === "gemini" ? cfg.apiKey : cfg.groqKey; }
+
+function parseReply(raw){
+  let t = raw.replace(/```json|```/g, "").trim();
+  const s = t.indexOf("{"), e = t.lastIndexOf("}");
+  try{
+    const o = JSON.parse(t.slice(s, e + 1));
+    const answers = (o.answers || [])
+      .filter(a => a && NAMES.includes(a.name) && a.text)
+      .map(a => ({ name: a.name, text: String(a.text).trim() }));
+    if(!answers.length) throw new Error("empty");
+    const summary = answers.length > 1 ? String(o.summary || "").trim() : "";
+    return { answers, summary };
+  }catch(e){
+    return { answers: [{ name: "ジャービス", text: raw.trim() || "すみません、うまく答えをまとめられませんでした。" }], summary: "" };
+  }
+}
+
+/* ===== 質問を処理 ===== */
+let busy = false;
+async function ask(q){
+  q = q.trim();
+  if(!q || busy) return;
+  if(!currentKey()){
+    addMsg("ジャービス", `まず設定画面で${cfg.provider === "gemini" ? "Gemini" : "Groq"}のAPIキーを入れてください。`, "sys");
+    openSettings(); return;
+  }
+  busy = true;
+  pauseListening();
+  addMsg("あなた", q, "user");
+  setState("thinking", "ジャービスが担当を選んでいます…");
+
+  let raw;
+  try{
+    raw = await callAI(q);
+  }catch(e){
+    let msg = "通信でエラーが起きました。少し待ってからもう一度お試しください。";
+    if(e.status === 429) msg = "無料枠の上限に達しています。しばらく待ってから話しかけてください。";
+    else if(e.status === 401 || e.status === 403) msg = "APIキーが正しくないようです。設定を確認してください。";
+    else if(e.status === 400 || e.status === 404) msg = "モデルが使えないようです。設定で別のモデルを選んでください。";
+    addMsg("ジャービス", msg, "sys");
+    console.error(e);
+    if(cfg.voiceOn){ setState("speaking"); await speak("ジャービス", msg); }
+    busy = false; resumeListening(); return;
+  }
+
+  const { answers, summary } = parseReply(raw);
+  addNote("担当：" + answers.map(a => a.name).join("・"));
+  for(const a of answers) addMsg(a.name, a.text);
+  if(summary) addMsg("ビジョン", summary, "summary");
+
+  history.push({ q, answers, summary });
+  if(history.length > 50) history = history.slice(-50);
+  store.set("history", history);
+
+  if(cfg.voiceOn){
+    setState("speaking", "話しています…（■停止で止められます）");
+    const queue = (summary && cfg.summaryOnly) ? [] : answers.slice();
+    if(summary) queue.push({ name: "ビジョン", text: summary });
+    for(const a of queue){
+      if(stopRequested) break;
+      await speak(a.name, a.text);
+    }
+  }
+  stopRequested = false;
+  busy = false;
+  resumeListening();
+}
+
+/* ===== 音声の読み上げ ===== */
+let voices = [];
+const MALE = /otoya|ichiro|keita|daichi|kenji|hattori|naoki|male|男性/i;
+const FEMALE = /kyoko|haruka|nanami|ayumi|sayaka|mizuki|o-ren|female|女性|google 日本語/i;
+function loadVoices(){
+  try{ voices = speechSynthesis.getVoices().filter(v => /^ja/i.test(v.lang)); }catch(e){ voices = []; }
+}
+if("speechSynthesis" in window){
+  loadVoices();
+  speechSynthesis.onvoiceschanged = loadVoices;
+}
+function pickVoice(gender){
+  if(!voices.length) return null;
+  const re = gender === "m" ? MALE : FEMALE;
+  return voices.find(v => re.test(v.name)) || voices[0];
+}
+let stopRequested = false;
+function speak(name, text){
+  return new Promise(resolve => {
+    if(!("speechSynthesis" in window)) return resolve();
+    const m = MEMBERS[name] || MEMBERS["ジャービス"];
+    const chunks = text.split(/(?<=[。！？!?])/).map(s => s.trim()).filter(Boolean); // 長文が途中で切れないよう分割
+    let i = 0;
+    const next = () => {
+      if(stopRequested || i >= chunks.length) return resolve();
+      const u = new SpeechSynthesisUtterance(chunks[i++]);
+      u.lang = "ja-JP";
+      const v = pickVoice(m.gender); if(v) u.voice = v;
+      u.pitch = m.pitch; u.rate = m.rate;
+      u.onend = next; u.onerror = next;
+      speechSynthesis.speak(u);
+    };
+    next();
+  });
+}
+function stopSpeaking(){
+  stopRequested = true;
+  try{ speechSynthesis.cancel(); }catch(e){}
+}
+
+/* ===== 「ジャービス」で起動（音声認識） ===== */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+const WAKE = /(ジャービス|ジャーヴィス|じゃーびす|ジャビス|ジャーベス|jarvis)/i;
+let rec = null, listening = false, recRunning = false, awaitingCommand = false, awaitTimer = null;
+
+function initRec(){
+  if(!SR) return null;
+  const r = new SR();
+  r.lang = "ja-JP";
+  r.continuous = true;
+  r.interimResults = true;
+  r.onstart = () => { recRunning = true; };
+  r.onend = () => {
+    recRunning = false;
+    if(listening && !busy) setTimeout(startRec, 300); // 自動で聞き直す
+  };
+  r.onerror = e => {
+    if(e.error === "not-allowed" || e.error === "service-not-allowed"){
+      listening = false;
+      setState("", "マイクが許可されていません。ブラウザの設定でマイクを許可してください。");
+    }
+  };
+  r.onresult = e => {
+    let finalText = "", interim = "";
+    for(let i = e.resultIndex; i < e.results.length; i++){
+      const t = e.results[i][0].transcript;
+      if(e.results[i].isFinal) finalText += t; else interim += t;
+    }
+    $("heard").textContent = interim || finalText;
+    if(finalText) handleHeard(finalText);
+  };
+  return r;
+}
+function startRec(){
+  if(!rec || recRunning || busy || !listening) return;
+  try{ rec.start(); }catch(e){}
+}
+function pauseListening(){
+  clearTimeout(awaitTimer); awaitingCommand = false;
+  if(rec && recRunning){ try{ rec.abort(); }catch(e){} }
+}
+function resumeListening(){
+  $("heard").textContent = "";
+  if(listening){
+    setState("listening", "待機中…「ジャービス」と呼んでください");
+    startRec();
+  }else{
+    setState("", "リアクターをタップすると「ジャービス」で起動できます");
+  }
+}
+function handleHeard(text){
+  if(busy) return;
+  const t = text.trim();
+  if(awaitingCommand){
+    clearTimeout(awaitTimer); awaitingCommand = false;
+    ask(t.replace(WAKE, "").replace(/^[、。,.\s]+/, ""));
+    return;
+  }
+  const m = t.match(WAKE);
+  if(!m) return;
+  const rest = t.slice(m.index + m[0].length).replace(/^[、。,.\sさん]+/, "").trim();
+  if(rest.length >= 2){
+    ask(rest);
+  }else{
+    awaitingCommand = true;
+    setState("awake", "はい、どうぞ。");
+    awaitTimer = setTimeout(() => { awaitingCommand = false; resumeListening(); }, 10000);
+  }
+}
+function toggleListening(){
+  if(!SR){
+    addMsg("ジャービス", "このブラウザは音声認識に対応していません。パソコンはChrome、iPhoneはSafariで開いてください。文字入力なら使えます。", "sys");
+    return;
+  }
+  if(!rec) rec = initRec();
+  listening = !listening;
+  if(listening){
+    // 読み上げの準備（スマホでは最初にタップ操作の中で一度鳴らす必要がある）
+    try{ speechSynthesis.speak(new SpeechSynthesisUtterance("")); }catch(e){}
+    resumeListening();
+  }else{
+    pauseListening();
+    resumeListening();
+  }
+}
+
+/* ===== 設定画面 ===== */
+function showProviderBoxes(){
+  const g = $("provider").value === "gemini";
+  $("geminiBox").style.display = g ? "" : "none";
+  $("groqBox").style.display = g ? "none" : "";
+}
+function openSettings(){
+  $("provider").value = cfg.provider;
+  $("groqKey").value = cfg.groqKey;
+  $("groqModel").value = cfg.groqModel;
+  showProviderBoxes();
+  $("apiKey").value = cfg.apiKey;
+  $("model").value = cfg.model;
+  $("profile").value = cfg.profile;
+  $("projects").value = cfg.projects;
+  $("voiceOn").checked = cfg.voiceOn;
+  $("summaryOnly").checked = cfg.summaryOnly;
+  $("settings").classList.add("open");
+}
+function saveSettings(){
+  cfg.provider = $("provider").value;
+  cfg.groqKey = $("groqKey").value.trim();
+  cfg.groqModel = $("groqModel").value;
+  cfg.apiKey = $("apiKey").value.trim();
+  cfg.model = $("model").value.trim() || "gemini-3.1-flash-lite";
+  cfg.profile = $("profile").value;
+  cfg.projects = $("projects").value;
+  cfg.voiceOn = $("voiceOn").checked;
+  cfg.summaryOnly = $("summaryOnly").checked;
+  for(const k of Object.keys(cfg)) store.set(k, cfg[k]);
+  $("settings").classList.remove("open");
+}
+function buildMemberButtons(){
+  const box = $("members");
+  for(const n of NAMES){
+    const b = document.createElement("button");
+    b.style.setProperty("--c", MEMBERS[n].color);
+    b.textContent = `${n}（${MEMBERS[n].role}）`;
+    b.onclick = () => { stopSpeaking(); stopRequested = false; speak(n, `${n}です。${MEMBERS[n].role}を担当します。`); };
+    box.append(b);
+  }
+}
+function exportData(){
+  const data = { version:2, profile:cfg.profile, projects:cfg.projects, voiceOn:cfg.voiceOn,
+                 summaryOnly:cfg.summaryOnly, model:cfg.model, provider:cfg.provider, groqModel:cfg.groqModel, history };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type:"application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "jarvis-backup.json";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+function importData(file){
+  const reader = new FileReader();
+  reader.onload = () => {
+    try{
+      const d = JSON.parse(reader.result);
+      if(typeof d.profile === "string") cfg.profile = d.profile;
+      if(typeof d.projects === "string") cfg.projects = d.projects;
+      if(typeof d.model === "string") cfg.model = d.model;
+      if(d.provider === "groq" || d.provider === "gemini") cfg.provider = d.provider;
+      if(typeof d.groqModel === "string") cfg.groqModel = d.groqModel;
+      if(typeof d.voiceOn === "boolean") cfg.voiceOn = d.voiceOn;
+      if(typeof d.summaryOnly === "boolean") cfg.summaryOnly = d.summaryOnly;
+      if(Array.isArray(d.history)) history = d.history;
+      for(const k of Object.keys(cfg)) store.set(k, cfg[k]);
+      store.set("history", history);
+      openSettings(); renderHistory();
+      alert("読み込みました。");
+    }catch(e){ alert("ファイルを読み込めませんでした。"); }
+  };
+  reader.readAsText(file);
+}
+
+/* ===== イベント ===== */
+$("reactor").onclick = toggleListening;
+$("sendBtn").onclick = () => { const v = $("text").value; $("text").value = ""; ask(v); };
+$("text").addEventListener("keydown", e => {
+  if(e.key === "Enter" && !e.isComposing){ e.preventDefault(); $("sendBtn").click(); }
+});
+$("stopBtn").onclick = stopSpeaking;
+$("setBtn").onclick = openSettings;
+$("provider").onchange = showProviderBoxes;
+$("closeBtn").onclick = saveSettings;
+$("exportBtn").onclick = exportData;
+$("importBtn").onclick = () => $("importFile").click();
+$("importFile").onchange = e => { if(e.target.files[0]) importData(e.target.files[0]); e.target.value = ""; };
+$("clearBtn").onclick = () => {
+  if(confirm("会話の履歴を消しますか？（プロジェクト情報は残ります）")){
+    history = []; store.set("history", history); renderHistory();
+  }
+};
+
+buildMemberButtons();
+renderHistory();
+if(!currentKey()){
+  addMsg("ジャービス", "右上の「設定」で使うAIを選び、そのAPIキーを入れてください。おすすめはGroqです。前に書き出した設定ファイルがあれば「読み込む」で引き継げます。そのあと、リアクターをタップして「ジャービス」と呼べば起動します。", "sys");
+}
+</script>
+</body>
+</html>
