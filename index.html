@@ -82,6 +82,7 @@ header button{white-space:nowrap}
   header h1{font-size:15px;letter-spacing:.1em}
   header button{padding:7px 10px;font-size:14px}
   #vvBadge{font-size:11px;padding:3px 7px}
+  header .lbl{display:none}
 }
 #credit{font-size:11px;color:#5c728a;text-align:center;margin-top:6px;min-height:14px;max-width:100%;line-height:1.5;overflow-wrap:anywhere}
 .vrow{border:1px solid var(--line);border-left:4px solid var(--c);border-radius:10px;padding:10px;margin-top:8px}
@@ -93,6 +94,38 @@ header button{white-space:nowrap}
 .vrow .sl input{flex:1;padding:0}
 .vrow .sl b{min-width:44px;text-align:right;color:var(--text);font-weight:500}
 #vvMsg{font-size:13px;margin-top:8px;line-height:1.6}
+
+/* 作ったもの（成果物カード） */
+.work{background:#0a1a24;border:1px solid var(--line);border-left:4px solid var(--c,var(--accent));
+  border-radius:12px;padding:12px 14px}
+.work .wtag{font-size:12px;font-weight:600;color:var(--c,var(--accent))}
+.work .wtitle{font-size:17px;font-weight:700;margin:4px 0 8px}
+.work .wbody{font-size:15px;line-height:1.8;overflow-wrap:anywhere;max-height:420px;overflow-y:auto;
+  background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.work.full .wbody{max-height:none}
+.wbody h1,.wbody h2,.wbody h3{margin:14px 0 6px;line-height:1.5;color:#fff}
+.wbody h1{font-size:18px}.wbody h2{font-size:16px}.wbody h3{font-size:15px}
+.wbody p{margin:6px 0}
+.wbody ul,.wbody ol{margin:6px 0;padding-left:1.4em}
+.wbody hr{border:none;border-top:1px solid var(--line);margin:12px 0}
+.wbody table{border-collapse:collapse;width:100%;font-size:14px;margin:8px 0;display:block;overflow-x:auto}
+.wbody th,.wbody td{border:1px solid var(--line);padding:6px 8px;text-align:left;vertical-align:top}
+.wbody th{background:var(--panel2)}
+.work .wbtns{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+.work .wbtns button{font-size:13px;padding:7px 11px}
+#makeBtn.on{background:var(--warn);border-color:var(--warn);color:#1a1000;font-weight:600}
+
+/* 作品一覧 */
+#worksPanel{position:fixed;inset:0;background:#000a;display:none;align-items:flex-start;justify-content:center;
+  overflow-y:auto;padding:16px;z-index:11}
+#worksPanel.open{display:flex}
+.witem{display:flex;align-items:center;gap:8px;border:1px solid var(--line);border-left:4px solid var(--c);
+  border-radius:10px;padding:9px 10px;margin-top:8px;cursor:pointer}
+.witem:hover{border-color:var(--accent)}
+.witem .wi{flex:1;min-width:0}
+.witem .wi b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.witem .wi small{font-size:12px;color:var(--muted)}
+.witem button{font-size:12px;padding:5px 9px}
 </style>
 </head>
 <body>
@@ -100,7 +133,8 @@ header button{white-space:nowrap}
   <h1>J.A.R.V.I.S.</h1>
   <span class="sp"></span>
   <span id="vvBadge" title="タップで接続を確かめ直します">VOICEVOX確認中…</span>
-  <button id="stopBtn" title="読み上げを止める">■ 停止</button>
+  <button id="stopBtn" title="読み上げを止める">■<span class="lbl"> 停止</span></button>
+  <button id="worksBtn" title="作ったものの一覧">作品</button>
   <button id="setBtn">設定</button>
 </header>
 
@@ -114,9 +148,23 @@ header button{white-space:nowrap}
 <div id="log"></div>
 
 <footer>
-  <input id="text" placeholder="文字で話しかける（例：新しい集客のアイデアある？）" autocomplete="off">
+  <button id="makeBtn" title="オンにすると、次の依頼を「完成品を作る」モードで送ります">作る</button>
+  <input id="text" placeholder="話しかける（例：インスタの投稿文を作って）" autocomplete="off">
   <button class="primary" id="sendBtn">送信</button>
 </footer>
+
+<div id="worksPanel">
+  <div class="card">
+    <h2>作ったもの</h2>
+    <div class="note">ジャービスたちが作った投稿文・記事・台本・リストなどが、この端末に保存されています。タップで開けます。</div>
+    <div id="worksView"></div>
+    <div id="worksList"></div>
+    <div class="row">
+      <span style="flex:1"></span>
+      <button class="primary" id="worksClose">閉じる</button>
+    </div>
+  </div>
+</div>
 
 <div id="settings">
   <div class="card">
@@ -174,7 +222,7 @@ header button{white-space:nowrap}
       <button id="importBtn">読み込む</button>
       <input type="file" id="importFile" accept="application/json" style="display:none">
     </div>
-    <div class="note">パソコンとスマホは保存場所が別々です。書き出したファイルをもう一方で読み込むと、プロジェクト情報と会話の続きを引き継げます。書き出しファイルにはAPIキーは含まれません。</div>
+    <div class="note">パソコンとスマホは保存場所が別々です。書き出したファイルをもう一方で読み込むと、プロジェクト情報と会話の続き、作ったものを引き継げます。書き出しファイルにはAPIキーは含まれません。</div>
 
     <div class="row">
       <button class="danger" id="clearBtn">会話の履歴を消す</button>
@@ -231,7 +279,12 @@ let cfg = {
   voiceOn: store.get("voiceOn", true),
   summaryOnly: store.get("summaryOnly", false)
 };
-let history = store.get("history", []);   // [{q, answers:[{name,text}], summary}]
+let history = store.get("history", []);   // [{q, answers:[{name,text}], summary, work?}]
+let works = store.get("works", []);       // 作ったもの [{id, title, body, name, q, date}]
+function saveWorks(){
+  if(works.length > 100) works = works.slice(-100);
+  store.set("works", works);
+}
 
 /* ===== 画面 ===== */
 const $ = id => document.getElementById(id);
@@ -265,7 +318,95 @@ function renderHistory(){
     addMsg("あなた", h.q, "user");
     for(const a of h.answers) addMsg(a.name, a.text);
     if(h.summary) addMsg("ビジョン", h.summary, "summary");
+    if(h.work) addWork(h.work);
   }
+}
+
+/* ===== 成果物の表示 ===== */
+const esc = s => String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function inlineMd(s){
+  return esc(s).replace(/\*\*(.+?)\*\*/g, "<b>$1</b>");
+}
+// かんたんなマークダウン表示（見出し・箇条書き・番号・表・区切り線・太字）
+function mdToHtml(md){
+  const lines = String(md).replace(/\r/g, "").split("\n");
+  let html = "", list = null, para = [];
+  const flushPara = () => { if(para.length){ html += "<p>" + para.map(inlineMd).join("<br>") + "</p>"; para = []; } };
+  const closeList = () => { if(list){ html += `</${list}>`; list = null; } };
+  for(let i = 0; i < lines.length; i++){
+    const line = lines[i];
+    const t = line.trim();
+    if(!t){ flushPara(); closeList(); continue; }
+    // 表
+    if(/^\|.*\|$/.test(t) && i + 1 < lines.length && /^\|?\s*:?-{2,}/.test(lines[i+1].trim())){
+      flushPara(); closeList();
+      const cells = r => r.trim().replace(/^\||\|$/g, "").split("|").map(c => inlineMd(c.trim()));
+      html += "<table><tr>" + cells(t).map(c => `<th>${c}</th>`).join("") + "</tr>";
+      i += 2;
+      while(i < lines.length && /^\|.*\|$/.test(lines[i].trim())){
+        html += "<tr>" + cells(lines[i]).map(c => `<td>${c}</td>`).join("") + "</tr>"; i++;
+      }
+      i--; html += "</table>"; continue;
+    }
+    let m;
+    if((m = t.match(/^(#{1,3})\s+(.*)$/))){ flushPara(); closeList(); const n = m[1].length; html += `<h${n}>${inlineMd(m[2])}</h${n}>`; continue; }
+    if(/^(-{3,}|\*{3,}|_{3,})$/.test(t)){ flushPara(); closeList(); html += "<hr>"; continue; }
+    if((m = t.match(/^[-*・]\s+(.*)$/))){ flushPara(); if(list !== "ul"){ closeList(); html += "<ul>"; list = "ul"; } html += `<li>${inlineMd(m[1])}</li>`; continue; }
+    if((m = t.match(/^\d+[.)．]\s*(.*)$/))){ flushPara(); if(list !== "ol"){ closeList(); html += "<ol>"; list = "ol"; } html += `<li>${inlineMd(m[1])}</li>`; continue; }
+    closeList(); para.push(t);
+  }
+  flushPara(); closeList();
+  return html;
+}
+// 読み上げ・コピー用に記号を取ったテキスト
+function mdToPlain(md){
+  return String(md).replace(/\r/g, "")
+    .replace(/^#{1,3}\s+/gm, "").replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/^\s*[-*]\s+/gm, "・").replace(/^(-{3,}|\*{3,}|_{3,})$/gm, "");
+}
+function fileName(title){
+  return (String(title || "ジャービスの作品").replace(/[\\/:*?"<>|\s]+/g, "_").slice(0, 40) || "work") + ".txt";
+}
+async function copyText(text, btn){
+  try{ await navigator.clipboard.writeText(text); }
+  catch(e){
+    const ta = document.createElement("textarea"); ta.value = text; document.body.append(ta);
+    ta.select(); try{ document.execCommand("copy"); }catch(_){} ta.remove();
+  }
+  if(btn){ const o = btn.textContent; btn.textContent = "コピーしました"; setTimeout(() => btn.textContent = o, 1500); }
+}
+function downloadText(title, text){
+  const blob = new Blob([text], { type:"text/plain;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = fileName(title); a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+// 成果物カードを作る（parent を省略すると会話ログに追加）
+function workCard(w, opts = {}){
+  const d = document.createElement("div");
+  d.className = "work" + (opts.full ? " full" : "");
+  const m = MEMBERS[w.name] || MEMBERS["ジャービス"];
+  d.style.setProperty("--c", m.color);
+  d.innerHTML = `<div class="wtag">作ったもの（${esc(w.name || "ジャービス")}）</div>
+    <div class="wtitle">${esc(w.title)}</div><div class="wbody">${mdToHtml(w.body)}</div><div class="wbtns"></div>`;
+  const btns = d.querySelector(".wbtns");
+  const add = (label, fn) => { const b = document.createElement("button"); b.textContent = label; b.onclick = () => fn(b); btns.append(b); return b; };
+  add("コピー", b => copyText(mdToPlain(w.body).trim(), b));
+  add("マークダウンでコピー", b => copyText(w.body.trim(), b));
+  if(navigator.share) add("共有", () => navigator.share({ title: w.title, text: mdToPlain(w.body).trim() }).catch(() => {}));
+  add("保存", () => downloadText(w.title, `${w.title}\n\n${mdToPlain(w.body).trim()}\n`));
+  add("読み上げ", async () => {
+    TTS.unlock && TTS.unlock();
+    setState("speaking", `${w.name || "ジャービス"}が読み上げています…（■停止で止められます）`);
+    await TTS.speakAll([{ name: w.name || "ジャービス", text: mdToPlain(w.body) }]);
+    resumeListening();
+  });
+  if(!opts.full) add("大きく表示", () => openWorks(w.id));
+  return d;
+}
+function addWork(w){
+  logEl.append(workCard(w));
+  logEl.scrollTop = logEl.scrollHeight;
 }
 
 /* ===== AI 呼び出し（Groq / Gemini） ===== */
@@ -303,12 +444,76 @@ ${cfg.projects}
 {"assignees":["担当名",...],"answers":[{"name":"担当名","text":"回答"}],"summary":"ビジョンのまとめまたは空文字"}`;
 }
 
-function buildUserText(q){
+/* --- 完成品を作るときのプロンプト --- */
+function buildCreatePrompt(){
+  const team = NAMES.map(n => `・${n}（${MEMBERS[n].role}）：${MEMBERS[n].style}`).join("\n");
+  return `あなたは「ジャービス」が率いる9人のAIチームです。今回はユーザーから「作って・書いて・まとめて」と頼まれたので、話すだけで終わらせず、そのまま使える完成品を作ります。
+
+【チーム】
+${team}
+
+【ユーザーについて】
+${cfg.profile}
+
+【進行中のプロジェクト】
+${cfg.projects}
+
+【ルール】
+1. 依頼の内容に一番合う担当を1人選ぶ（投稿文・集客 → トニー、やることリスト・予定 → ペッパー、記事や調べてまとめる資料 → ブルース、事業計画や判断材料 → ナターシャ、アイデア集 → トール、数字・表・アプリ → シュリ、要約 → ビジョン、それ以外 → ジャービス）。
+2. 完成品は、ユーザーがコピーしてそのまま使える形で最後まで作る。「〜など」「以下略」「（ここに入れる）」のような省略や穴あけはしない。必要な情報が足りないときは、進行中のプロジェクトの内容から自然に補い、補った部分は最後に「確認してほしい点」として短く書く。
+3. 完成品の中ではマークダウン（# 見出し、- 箇条書き、1. 番号、| 表 |、**太字**）を使ってよい。SNS投稿文ならハッシュタグも入れる。完成品の中ではキャラクターの口調にしない（ユーザー本人が使う文章として書く）。
+4. 進行中のプロジェクトに書かれた注意点（例：noteにはアムウェイ製品の案内を入れない）は必ず守る。
+5. 「これまでの会話」に前に作った完成品があり、今回それを直す・短くする・続きを書くなどの依頼なら、前の完成品をもとに全体を書き直して、直した完成版を最初から最後まで出す。
+6. 「ひとこと」は担当のキャラクターの口調で、何を作ったかを話し言葉で1〜2文。音声で読み上げるので記号や箇条書きを使わない。ユーザーの呼びかけは「ユーザーについて」の名前に「さん」を付ける。
+
+【出力の形】
+次の形だけを出力する。前後に説明文を付けない。
+【担当】担当名
+【ひとこと】ひとこと
+【タイトル】完成品のタイトル
+【本文】
+完成品の本文（何行でもよい）`;
+}
+
+function buildUserText(q, withWork){
   const recent = history.slice(-4).map(h => {
     const a = h.answers.map(x => `${x.name}：${x.text}`).join("\n");
-    return `ユーザー：${h.q}\n${a}${h.summary ? "\nビジョン（まとめ）：" + h.summary : ""}`;
+    const w = h.work ? `\n（作ったもの：「${h.work.title}」）` : "";
+    return `ユーザー：${h.q}\n${a}${h.summary ? "\nビジョン（まとめ）：" + h.summary : ""}${w}`;
   }).join("\n\n");
-  return (recent ? `【これまでの会話】\n${recent}\n\n` : "") + `【今回の質問】\n${q}`;
+  let base = "";
+  if(withWork){
+    const last = [...history].reverse().find(h => h.work);
+    if(last) base = `【前に作った完成品「${last.work.title}」】\n${last.work.body.slice(0, 6000)}\n\n`;
+  }
+  return (recent ? `【これまでの会話】\n${recent}\n\n` : "") + base + `【今回の${withWork ? "依頼" : "質問"}】\n${q}`;
+}
+
+/* --- 「作って」系の依頼かどうか --- */
+const MAKE_WORDS = /(作って|つくって|作成|作れる|書いて|かいて|まとめて|整理して|リスト(に|化|アップ)|一覧に|表に(して|まとめ)|下書き|台本|原稿|投稿文|キャプション|記事|ブログ|文章を|文面|メール(を|の)?(書|作)|企画書|計画(表|書)|チラシ|スケジュール(を|表)|考えて.*(文|案|タイトル|台本))/;
+const REVISE_WORDS = /(直して|なおして|修正|書き直|作り直|短く|長く|詳しく|続き|追加して|足して|変えて|削って|やわらかく|硬く|もう(一|1)回|別(の|バージョン)|ほかの案|他の案)/;
+function lastWork(){ const h = [...history].reverse().find(x => x.work); return h ? h.work : null; }
+function wantsMake(q){
+  if(MAKE_WORDS.test(q)) return true;
+  // 直前に作ったものがあって「短くして」などと言われたら作り直し
+  const last = history[history.length - 1];
+  return !!(last && last.work && REVISE_WORDS.test(q));
+}
+
+function parseCreate(raw){
+  const t = String(raw).replace(/^```[a-z]*\n?|```$/gm, "").trim();
+  const get = key => { const m = t.match(new RegExp(`【${key}】[ \\t]*([^\\n]*)`)); return m ? m[1].trim() : ""; };
+  let name = get("担当").replace(/（.*?）|\(.*?\)/g, "").trim();
+  if(!NAMES.includes(name)) name = "ジャービス";
+  const say = get("ひとこと");
+  const title = get("タイトル");
+  const bi = t.indexOf("【本文】");
+  let body = bi >= 0 ? t.slice(bi + 4).trim() : "";
+  if(!body){
+    // 形が崩れたときは、見出し行を取り除いた全体を本文にする
+    body = t.replace(/^【(担当|ひとこと|タイトル)】.*$/gm, "").trim();
+  }
+  return { name, say, title, body };
 }
 
 function httpError(res, text){
@@ -318,18 +523,19 @@ function httpError(res, text){
   return err;
 }
 
-async function callGroq(q){
+// req = { system, user, maxTokens, json }
+async function callGroq(req){
   const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", "Authorization": "Bearer " + cfg.groqKey },
     body: JSON.stringify({
       model: cfg.groqModel,
       messages: [
-        { role: "system", content: buildSystemPrompt() },
-        { role: "user", content: buildUserText(q) }
+        { role: "system", content: req.system },
+        { role: "user", content: req.user }
       ],
-      temperature: 0.8,
-      max_tokens: 1200
+      temperature: req.json ? 0.8 : 0.7,
+      max_tokens: req.maxTokens
     })
   });
   if(!res.ok) throw httpError(res, await res.text());
@@ -337,11 +543,14 @@ async function callGroq(q){
   return (j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || "";
 }
 
-async function callGemini(q){
+async function callGemini(req){
+  const gen = { temperature: req.json ? 0.8 : 0.7 };
+  if(req.json) gen.responseMimeType = "application/json";
+  else gen.maxOutputTokens = 8192;   // 完成品は長くなるので上限を広げる
   const body = {
-    systemInstruction: { parts: [{ text: buildSystemPrompt() }] },
-    contents: [{ role: "user", parts: [{ text: buildUserText(q) }] }],
-    generationConfig: { temperature: 0.8, responseMimeType: "application/json" }
+    systemInstruction: { parts: [{ text: req.system }] },
+    contents: [{ role: "user", parts: [{ text: req.user }] }],
+    generationConfig: gen
   };
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(cfg.model || "gemini-3.1-flash-lite")}:generateContent`;
   const res = await fetch(url, {
@@ -357,10 +566,10 @@ async function callGemini(q){
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 // 1回の質問につき1回だけ呼ぶ。上限(429)や混雑(5xx)のときは待って最大3回やり直す
-async function callAI(q){
+async function callAI(req, waitMsg){
   const fn = cfg.provider === "gemini" ? callGemini : callGroq;
   for(let attempt = 0; ; attempt++){
-    try{ return await fn(q); }
+    try{ return await fn(req); }
     catch(e){
       const retryable = e.status === 429 || (e.status >= 500 && e.status < 600);
       if(!retryable || attempt >= 3) throw e;
@@ -369,7 +578,7 @@ async function callAI(q){
         setState("thinking", `混み合っています。${s}秒待ってやり直します…`);
         await sleep(1000);
       }
-      setState("thinking", "ジャービスが担当を選んでいます…");
+      setState("thinking", waitMsg || "ジャービスが担当を選んでいます…");
     }
   }
 }
@@ -408,19 +617,17 @@ async function ask(q){
   busy = true;
   pauseListening();
   addMsg("あなた", q, "user");
+
+  const make = makeMode || wantsMake(q);
+  setMakeMode(false);
+  if(make) return askMake(q);
   setState("thinking", "ジャービスが担当を選んでいます…");
 
   let raw;
   try{
-    raw = await callAI(q);
+    raw = await callAI({ system: buildSystemPrompt(), user: buildUserText(q, false), maxTokens: 1200, json: true });
   }catch(e){
-    let msg = "通信でエラーが起きました。少し待ってからもう一度お試しください。";
-    if(e.status === 429) msg = "無料枠の上限に達しています。しばらく待ってから話しかけてください。";
-    else if(e.status === 401 || e.status === 403) msg = "APIキーが正しくないようです。設定を確認してください。";
-    else if(e.status === 400 || e.status === 404) msg = "モデルが使えないようです。設定で別のモデルを選んでください。";
-    addMsg("ジャービス", msg, "sys");
-    console.error(e);
-    if(cfg.voiceOn){ setState("speaking"); await speak("ジャービス", msg); }
+    await showError(e);
     busy = false; resumeListening(); return;
   }
 
@@ -443,6 +650,98 @@ async function ask(q){
   }
   busy = false;
   resumeListening();
+}
+
+async function showError(e){
+  let msg = "通信でエラーが起きました。少し待ってからもう一度お試しください。";
+  if(e.status === 429) msg = "無料枠の上限に達しています。しばらく待ってから話しかけてください。";
+  else if(e.status === 413) msg = "依頼が長すぎて無料枠に収まりませんでした。少し短めに頼むか、分けて頼んでください。";
+  else if(e.status === 401 || e.status === 403) msg = "APIキーが正しくないようです。設定を確認してください。";
+  else if(e.status === 400 || e.status === 404) msg = "モデルが使えないようです。設定で別のモデルを選んでください。";
+  addMsg("ジャービス", msg, "sys");
+  console.error(e);
+  if(cfg.voiceOn){ setState("speaking"); await speak("ジャービス", msg); }
+}
+
+/* ===== 完成品を作る ===== */
+async function askMake(q){
+  const waitMsg = "チームが完成品を作っています…（長いものは少し時間がかかります）";
+  setState("thinking", waitMsg);
+  const revising = !!lastWork() && REVISE_WORDS.test(q);
+  let raw;
+  try{
+    raw = await callAI({ system: buildCreatePrompt(), user: buildUserText(q, revising), maxTokens: 6000, json: false }, waitMsg);
+  }catch(e){
+    await showError(e);
+    busy = false; resumeListening(); return;
+  }
+  const p = parseCreate(raw);
+  if(!p.body){
+    await showError(new Error("empty"));
+    busy = false; resumeListening(); return;
+  }
+  const work = { id: Date.now().toString(36), title: p.title || q.slice(0, 30), body: p.body, name: p.name, q, date: new Date().toISOString() };
+  const say = p.say || `${work.title}を作りました。画面に表示しています。`;
+  const answers = [{ name: p.name, text: say }];
+
+  addNote("担当：" + p.name + "（作成）");
+  addMsg(p.name, say);
+  addWork(work);
+
+  works.push(work); saveWorks();
+  history.push({ q, answers, summary: "", work });
+  if(history.length > 50) history = history.slice(-50);
+  store.set("history", history);
+
+  if(cfg.voiceOn){
+    setState("speaking", `${p.name}が話しています…（■停止で止められます）`);
+    await TTS.speakAll(answers);
+  }
+  busy = false;
+  resumeListening();
+}
+
+/* 「作る」ボタン：オンにすると次の依頼を必ず作成モードで送る */
+let makeMode = false;
+function setMakeMode(on){
+  makeMode = on;
+  $("makeBtn").classList.toggle("on", on);
+  $("text").placeholder = on ? "何を作りますか？（例：明日のインスタ投稿文）" : "話しかける（例：インスタの投稿文を作って）";
+}
+
+/* ===== 作品一覧 ===== */
+function openWorks(id){
+  const list = $("worksList"), view = $("worksView");
+  list.innerHTML = ""; view.innerHTML = "";
+  if(id){
+    const w = works.find(x => x.id === id) || (history.find(h => h.work && h.work.id === id) || {}).work;
+    if(w){
+      view.append(workCard(w, { full: true }));
+      const back = document.createElement("button"); back.textContent = "← 一覧に戻る"; back.style.marginTop = "10px";
+      back.onclick = () => openWorks();
+      view.append(back);
+    }
+  }else if(!works.length){
+    list.innerHTML = `<div class="note" style="margin-top:12px">まだ何もありません。「インスタの投稿文を作って」のように頼むと、ここにたまっていきます。</div>`;
+  }else{
+    for(const w of [...works].reverse()){
+      const row = document.createElement("div"); row.className = "witem";
+      row.style.setProperty("--c", (MEMBERS[w.name] || MEMBERS["ジャービス"]).color);
+      const d = new Date(w.date);
+      row.innerHTML = `<div class="wi"><b>${esc(w.title)}</b><small>${esc(w.name)}・${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,"0")}</small></div>`;
+      const del = document.createElement("button"); del.className = "danger"; del.textContent = "削除";
+      del.onclick = ev => {
+        ev.stopPropagation();
+        if(!confirm(`「${w.title}」を削除しますか？`)) return;
+        works = works.filter(x => x.id !== w.id); saveWorks(); openWorks();
+      };
+      row.onclick = () => openWorks(w.id);
+      row.append(del);
+      list.append(row);
+    }
+  }
+  $("worksPanel").classList.add("open");
+  $("worksPanel").scrollTop = 0;
 }
 
 /* ===== 音声の読み上げ（中身は tts.js、声の設定は voices.js） ===== */
@@ -683,7 +982,7 @@ function saveVoiceSettings(){
 function exportData(){
   const data = { version:2, profile:cfg.profile, projects:cfg.projects, voiceOn:cfg.voiceOn,
                  summaryOnly:cfg.summaryOnly, model:cfg.model, provider:cfg.provider, groqModel:cfg.groqModel,
-                 voiceSettings: TTS.settings(), history };
+                 voiceSettings: TTS.settings(), history, works };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type:"application/json" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
@@ -704,9 +1003,10 @@ function importData(file){
       if(typeof d.voiceOn === "boolean") cfg.voiceOn = d.voiceOn;
       if(typeof d.summaryOnly === "boolean") cfg.summaryOnly = d.summaryOnly;
       if(Array.isArray(d.history)) history = d.history;
+      if(Array.isArray(d.works)) works = d.works;
       if(d.voiceSettings && d.voiceSettings.members) TTS.saveSettings(d.voiceSettings);
       for(const k of Object.keys(cfg)) store.set(k, cfg[k]);
-      store.set("history", history);
+      store.set("history", history); saveWorks();
       openSettings(); renderHistory();
       alert("読み込みました。");
     }catch(e){ alert("ファイルを読み込めませんでした。"); }
@@ -722,6 +1022,10 @@ $("text").addEventListener("keydown", e => {
 });
 $("stopBtn").onclick = stopSpeaking;
 $("setBtn").onclick = openSettings;
+$("worksBtn").onclick = () => openWorks();
+$("worksClose").onclick = () => $("worksPanel").classList.remove("open");
+$("worksPanel").onclick = e => { if(e.target.id === "worksPanel") $("worksPanel").classList.remove("open"); };
+$("makeBtn").onclick = () => { setMakeMode(!makeMode); $("text").focus(); };
 $("provider").onchange = showProviderBoxes;
 $("closeBtn").onclick = saveSettings;
 $("exportBtn").onclick = exportData;
